@@ -1,0 +1,508 @@
+---
+title: "Sleeper Dynasty Stats 2025"
+author: "Connor Fitzgerald"
+prefer-html: true
+date: today
+format: html
+echo: FALSE
+warning: FALSE
+message: FALSE
+---
+
+
+
+
+
+```{r}
+library(tidyverse)
+library(skimr)
+library(ggthemes)
+library(knitr)
+library(flextable)
+library(tidymodels)
+library(plotly)
+library(patchwork)
+library(gganimate)
+library(gifski)
+library(forcats)
+library(tidytext)
+```
+
+#2025 Common Dynasty Report: Wins/Losses and Team Data
+  Collected and imported data, created new variables, designed visualizations using ggplot and plotly in RStudio to show outcomes and other league information. Conducted a linear regression to examine the correlation transactions made has on win percentage.
+
+
+
+```{r}
+SleeperData <- read.csv("C:\\Users\\cpfit\\Downloads\\Common Dynasty Stats 2025 - Sheet1 (5).csv")
+```
+
+This is an attempt at creating visuals for the stats from this past fantasy season with the data from Sleeper.  
+
+```{r}
+SleeperData <- SleeperData |>
+  dplyr::mutate(PlusMinus = Points.For - Points.Against)
+```
+
+```{r}
+SleeperData <- SleeperData |>
+  dplyr::mutate(WinPercentage = Wins/28)
+```
+
+```{r}
+#Find correlation/no correlation between transactions and win percentage
+```
+
+
+```{r}
+plusminus <- SleeperData |>
+  group_by(Name) |>
+  summarise(PlusMinustot = sum(PlusMinus, na.rm = TRUE),
+            .groups = "drop")
+```
+
+```{r}
+skim(SleeperData)
+```
+
+
+```{r}
+SleeperData |>
+  ggplot(aes(x = fct_reorder(Name, Transactions, .na_rm = TRUE),
+             y = Transactions, fill = Name)) +
+  geom_col() +
+  scale_y_continuous(breaks = seq(0, 55, by = 10)) +
+  coord_cartesian(ylim = c(0, 55)) +
+  scale_fill_viridis_d() +
+  labs(title = "Transactions Made in 2025",
+       y = "Transactions",
+       x = NULL) +
+  theme_clean() +
+   theme(axis.text.x = element_text(angle = 25, vjust = .5, face = "bold"),
+         legend.position = "none")
+```
+
+```{r}
+#creating a new variable 
+#finalstanding <- SleeperData |>
+#  count(Name, Win.Loss) |>
+#  mutate(total.record = sum(count.signed)) |>
+#  group_by(Name) |>
+#  mutate(total.record = sum(count.signed)) |>
+#  ungroup() |>
+#  mutate(Name = fct_reorder(Name, total.record)) |>
+  
+#  ggplot(aes(Name, count.signed, fill = Name,
+#         text = paste("Team", Name,
+#                      "<br>Total Record", total.record,
+#                      "<br>", Win.Loss, ":", abs(n)))) +
+#  geom_col() +
+#  scale_fill_viridis_d() +
+#  scale_y_continuous(breaks = seq(-30, 30, by = 5)) +
+#  labs(title = "2025 Regular Season Final Standings",
+#       y = "Wins and Losses",
+#       x = NULL) +
+#  theme_clean() +
+#  theme(axis.text.x = element_text(angle = 25, hjust = 1, face = "bold"))
+```
+
+```{r}
+#ggplotly(finalstanding, tooltip = "text")
+```
+
+```{r}
+finalstanding <- SleeperData |>
+  count(Name, Win.Loss) |>
+  pivot_wider(names_from = Win.Loss, values_from = n, values_fill = 0) |>
+  mutate(Total = Win + Loss,hover_text = paste0("Team", Name, 
+                                                    "<br>Wins: ", Win,
+                                                    "<br>Losses: ", Loss,
+                                                    "<br>Total Games: ", Total)) |>
+  
+  pivot_longer(cols = c(Win, Loss),
+               names_to = "Outcome",
+               values_to = "Count") |>
+  group_by(Name) |>
+  mutate(losses = sum(Count[Outcome == "Loss"])) |>
+  ungroup() |>
+  mutate(Name = fct_reorder(Name, losses, .desc = TRUE)) 
+  
+  
+finalstandingfigure <- finalstanding |> 
+  ggplot(aes(x = Name, y = Count, fill = Outcome,
+         text = hover_text)) +
+  geom_col(position = position_dodge(width = .9), color = "black") +
+  scale_fill_manual(values = c("Win" = "deepskyblue4", "Loss" = "red4")) +
+  labs(title = "2025 Regular Season Final Standings",
+       x = NULL,
+       y = "Wins/Losses",
+       fill = "Key") +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1, face = "bold"))
+```
+
+```{r}
+ggplotly(finalstandingfigure, tooltip = "text")
+```
+
+
+
+```{r}
+#Change y axis decimals to max of 2, round up
+SleeperData |>
+  ggplot(aes(x = fct_reorder(Name, WinPercentage, .na_rm = TRUE),
+             y = WinPercentage, fill = Name)) +
+  geom_col() +
+  scale_y_continuous(breaks = seq(0, 1, by = .125)) +
+  scale_fill_viridis_d() +
+  labs(title = "Win Percentage in 2025 (Regular Season)",
+       x = NULL,
+       y = "Win Percentage") +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle = 25, vjust = .5, face = "bold"),
+        legend.position = "none")
+```
+
+
+
+```{r}
+# scale_fill_manual(values = c("#80146E", "#833D98", "#6771B8", "#4F87BF", "#2EA4C2", "#3ABCBF", "#68CEBA", "#98DDB7", "#C4E8BB", "#E6EFC9")) scale_fill_manual(values = c("#26185F", "#01357B", "#005195", "#006DAA", "#0086B1", "#0098AF", "#00AAAE", "#00B9AF", "#56C8B2", "#83D5B7"))
+InteractivePlot1 <- SleeperData |>
+    dplyr::mutate(Name = factor(Name, levels = sort(unique(Name)))) |>
+  ggplot(aes(x=fct_reorder(Name, Points.For, .na_rm = TRUE),
+             y = Points.For, fill = fct_reorder(Name, Points.For, .na_rm = TRUE),
+             text = paste("Team", Name,
+                          "<br>Week:", Week,
+                          "<br>Points", Points.For))) +
+  geom_col(na.rm = TRUE) +
+  scale_fill_viridis_d() +
+  scale_y_continuous(labels = scales::comma,
+                     expand = expansion(mult = c(0, 0.1)),
+                     breaks = seq(0, 250, by = 50)) +
+  coord_cartesian(ylim = c(50, 260)) +
+  labs(title = "Points Scored by Team per Week",
+       x = "Week",
+       y = "Points Scored this Season",
+       fill = "Team Name",
+       caption = "Data compiled by me") +
+  facet_wrap(~ Week) +
+  theme_base() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        title = element_text(size = 15),
+        axis.text.y.left = element_text(size = 10))
+
+```
+
+```{r}
+ggplotly(InteractivePlot1, tooltip = "text") |>
+  layout(width = 800,
+         height = 480,
+         margin = list(l = 50, r = 30, b = 50, t = 60))
+
+```
+
+
+
+
+
+
+```{r}
+plusminus |>
+  ggplot(aes(x = fct_reorder(Name, PlusMinustot, .na_rm = TRUE),
+             y = PlusMinustot, fill = Name)) +
+  geom_col(na.rm = TRUE) +
+  scale_y_continuous(breaks = seq(-650, 600, by = 75)) +
+  theme_clean() +
+  scale_fill_viridis_d() +
+  labs(title = "Total Point Differential (2025 Regular Season)",
+       y = "Point Differential",
+       x = NULL,
+       caption = "Point Differential takes your total points for and subtracts your total points against to show
+       how good of an offense you have vs. how good other teams were against you") +
+  theme(axis.text.x = element_text(angle = 25, vjust = .5),
+        axis.text.x.bottom = element_text(face = "bold"),
+        legend.position = "none")
+```
+
+```{r}
+#Set a geom_col for each team's high/low point value with the middle of the y axis equaling 125.
+
+MaxMinPointsFor <- SleeperData |>
+  group_by(Name) |>
+  summarise(min.points = min(Points.For, na.rm = TRUE),
+            max.points = max(Points.For, na.rm = TRUE))
+```
+
+```{r}
+averagepointsscored <- SleeperData |>
+  group_by(Name) |>
+  summarise(pts.for.avg = mean(Points.For, na.rm = TRUE),
+            pts.agst.avg = mean(Points.Against, na.rm = TRUE))
+```
+
+
+```{r}
+MaxMinPointsFor |>
+  ggplot(aes(x = fct_reorder(Name, max.points, .na_rm = TRUE),
+             y = max.points, fill = Name)) +
+  geom_col() +
+  scale_y_continuous(breaks = seq(0, 275, by = 25)) +
+  coord_cartesian(ylim = c(125, 260)) +
+  scale_fill_viridis_d() +
+  labs(title = "Maximum Points Scored in One Week",
+       y = "Points Scored",
+       x = NULL) +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1, face = "bold"),
+        legend.position = "none")
+```
+Correlate this with win %. Does a higher max correlate with a higher win %?
+
+
+```{r}
+MaxMinPointsFor |>
+  ggplot(aes(x = (fct_reorder(Name, min.points, .na_rm = TRUE)),
+             y = min.points, fill = Name)) +
+  geom_col() +
+  scale_y_continuous(breaks = seq(0, 175, by = 25)) +
+  coord_cartesian(ylim = c(50, 175)) +
+  scale_fill_viridis_d() +
+  labs(title = "Least Points Scored in One Week",
+       y = "Points Scored",
+       x = NULL) +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1, face = "bold"),
+        legend.position = "none")
+```
+
+```{r}
+averagepointsscored |>
+  ggplot(aes(x = fct_reorder(Name, pts.for.avg, .na_rm = TRUE),
+             y = pts.for.avg, fill = Name)) +
+  geom_col() +
+  scale_y_continuous(breaks = seq(0, 200, by = 25)) +
+  coord_cartesian(ylim = c(100, 215)) +
+  labs(title = "Average Points per Week 2025",
+       x = NULL,
+       y = "Points Scored") +
+  scale_fill_viridis_d() +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1, face = "bold"),
+        axis.text.y = element_text(face = "bold"),
+        legend.position = "none")
+  
+```
+
+
+```{r}
+avgptsagst <- averagepointsscored |>
+  ggplot(aes(x = fct_reorder(Name, pts.agst.avg, .na_rm = TRUE),
+             y = pts.agst.avg, fill = Name,
+             text = paste0("Team", Name,
+                          "<br>Avg Points Against: ", sprintf("%.3f", pts.agst.avg)))) +
+  geom_col() +
+  scale_y_continuous(breaks = seq(0, 225, by = 10)) +
+  coord_cartesian(ylim = c(150, 185)) +  
+  labs(title = "Average Points Against per Week 2025",
+       x = NULL,
+       y = "Points Scored Against") +
+  scale_fill_viridis_d() +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1, face = "bold"),
+        axis.text.y = element_text(face = "bold"),
+        legend.position = "none")
+```
+
+```{r}
+ggplotly(avgptsagst, tooltip = "text")
+```
+
+
+```{r}
+maxminwin <- MaxMinPointsFor |>
+  left_join(SleeperData, by = "Name")
+```
+
+
+```{r}
+model2 <- lm(max.points ~ WinPercentage, data = maxminwin)
+```
+```{r}
+winpmaxpr2 <- glance(model2)$r.squared
+winpmaxpr = sign(coef(model2)[2]) * sqrt(winpmaxpr2)
+```
+
+
+```{r}
+Model <- lm(Transactions ~ WinPercentage, data = SleeperData)
+
+#summary(Model)
+```
+
+
+
+```{r}
+r2 <- glance(Model)$r.squared
+r <- sign(coef(Model)[2]) * sqrt(r2)
+```
+
+
+
+```{r}
+SleeperData |>
+  ggplot(aes(WinPercentage, Transactions)) +
+  geom_point(alpha = .7) +
+  geom_smooth(method = "lm", color = "darkgreen", se = TRUE) +
+  annotate("text", x = Inf, y = Inf, label = paste0("r = ", round(r, 2), "\nR2 = ", round(r2, 2)),
+           hjust = 1.1, vjust = 1.5) +
+  theme_clean() +
+  labs(title = "Linear Regression on Transactions and Win Percentage",
+       x = "Win Percentage",
+       y = "Transactions Made")
+```
+
+```{r}
+maxminwin |>
+  ggplot(aes(WinPercentage, max.points)) +
+  geom_point(alpha = .7) +
+  geom_smooth(method = "lm", color = "limegreen", se = TRUE) +
+  annotate("text", x = Inf, y = Inf, label = paste0("r = ", round(winpmaxpr, 3), "\nR2 = ", round(winpmaxpr2, 3)),
+           hjust = 1.1, vjust = 7.5) +
+  theme_clean() +
+  labs(title = "Linear Regression on Maximum Points Scored and Win Percentage",
+       x = "Win Percentage",
+       y = "Maximum Points Scored",
+       caption = "Maximum points scored shows the one week maximum a team scored during the regular season.")
+```
+
+```{r}
+#summary(model2)
+```
+
+```{r}
+model3 <- lm(min.points ~ WinPercentage, data = maxminwin)
+
+#summary(model3)
+```
+```{r}
+winpminr2 <- glance(model3)$r.squared
+winpminr <- sign(coef(model3)[2]) * sqrt(winpminr2)
+```
+
+
+```{r}
+maxminwin |>
+  ggplot(aes(WinPercentage, min.points)) +
+  geom_point(alpha = .7) +
+  geom_smooth(method = "lm", color = "darkred", se = TRUE) +
+  annotate("text", x = Inf, y = Inf, label = paste0("r = ", round(winpminr, 3), "\nR2 = ", round(winpminr2, 3)),
+           hjust = 1.1, vjust = 7.5) +
+  theme_clean() +
+  labs(title = "Linear Regression on Minimum Points Scored and Win Percentage",
+       x = "Win Percentage",
+       y = "Minimum Points Scored",
+       caption = "Minimum points scored shows the one week maximum a team scored during the regular season.")
+```
+```{r}
+cum_points <- maxminwin |>
+  mutate(Week = as.integer(Week)) |>
+  group_by(Name) |>
+  arrange(Week, .by_group = TRUE) |>
+  mutate(total.points = cumsum(replace_na(Points.For, 0))) |>
+  ungroup()
+```
+
+```{r}
+cumpoints1 <- cum_points |>
+  ggplot(aes(x = Week, y = total.points, color = Name)) +
+  scale_color_viridis_d() +
+  coord_cartesian(xlim = c(0,15),
+                  ylim = c(0,3000)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::comma) +
+  theme_clean()
+
+ggplotly(cumpoints1)
+```
+
+```{r}
+maxminwin <- maxminwin |>
+  mutate(actualvsexpected = Points.For - Expected.Points.For) |>
+  group_by(Name) |>
+  mutate(avgactualvsexpected = round(mean(actualvsexpected, na.rm = TRUE), 3)) |>
+  ungroup()
+```
+
+
+```{r}
+collectiveave <- maxminwin |>
+  ggplot(aes(x = Week, y = actualvsexpected, color = Name,
+             text = paste("Team:", Name,
+                          "<br>Week:", Week,
+                          "<br>Difference:", actualvsexpected))) +
+  scale_color_viridis_d() +
+  coord_cartesian(xlim = c(0,15),
+                  ylim = c(-70,70)) +
+  scale_y_continuous(breaks = seq(-70,70, by = 20)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_line() +
+  geom_point() +
+  theme_clean()
+```
+
+```{r}
+ggplotly(collectiveave, tooltip = "text")
+```
+
+
+
+```{r}
+actvsexp <- maxminwin |>
+  ggplot(aes(x = Week, y = actualvsexpected, color = Name,
+             text = paste("Team:", Name,
+                          "<br>Week:", Week,
+                          "<br>Difference:", actualvsexpected))) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_line() +
+  geom_point() +
+  scale_color_viridis_d() +
+  coord_cartesian(#ylim = c(-75, 75),
+                  xlim = c(0, 15)) +
+  scale_x_continuous(breaks = seq(0, 15, by = 5)) +
+  scale_y_continuous(breaks = seq(-75, 75, by = 15)) +
+  facet_wrap(~ Name, scales = "free_y") +
+  theme_clean() +
+  theme(legend.position = "none")
+```
+
+```{r}
+ggplotly(actvsexp, tooltip = "text", height = 470)
+```
+
+```{r}
+#this will force it to update for sure
+maxminwin |>
+  mutate(avgactualvsexpected = avgactualvsexpected/28) |>
+  ggplot(aes(x = fct_reorder(Name, avgactualvsexpected, .na_rm = TRUE),
+             y = avgactualvsexpected, fill = Name)) +
+  geom_col() +
+  coord_cartesian(ylim = c(-15,5)) +
+  scale_fill_viridis_d() +
+  labs(title = "Average Difference in Expected and Actual by Team",
+       x = "Team Name",
+       y = "Average Difference in Expected and Actual") +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle = 25, vjust = .75),
+        legend.position = "none")
+```
+this is to update the index qmd and file I hope
+
+
+
+
+
+
+
+
